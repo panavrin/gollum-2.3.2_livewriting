@@ -122,23 +122,46 @@ module Precious
       @path = wikip.path
       wiki = wikip.wiki
       if page = wikip.page
-        if wiki.live_preview && page.format.to_s.include?('markdown') && supported_useragent?(request.user_agent)
-          live_preview_url = '/livepreview/index.html?page=' + encodeURIComponent(@name)
-          if @path
-            live_preview_url << '&path=' + encodeURIComponent(@path)
-          end
-          redirect to(live_preview_url)
-        else
+        # Sang : This part is commmented just to disable live preview part. 
+        #if wiki.live_preview && page.format.to_s.include?('markdown') && supported_useragent?(request.user_agent)
+          #live_preview_url = '/livepreview/index.html?page=' + encodeURIComponent(@name)
+          #if @path
+          #  live_preview_url << '&path=' + encodeURIComponent(@path)
+          #end
+          #redirect to(live_preview_url)
+        #else
           @page = page
           @page.version = wiki.repo.log(wiki.ref, @page.path).first
           raw_data = page.raw_data
           @content = raw_data.respond_to?(:force_encoding) ? raw_data.force_encoding('UTF-8') : raw_data
           mustache :edit
-        end
+        #end
       else
         redirect to("/create/#{encodeURIComponent(@name)}")
       end
     end
+
+    get '/replay/*/*' do
+      wikip = wiki_page(params[:splat].first)
+      @name = wikip.name
+      @path = wikip.path
+      wiki = wikip.wiki
+      file = File.open(params[:splat][1] + ".json", "r")
+      replayActions = file.read
+      
+      if page = wikip.page
+        @page = page
+        @page.version = wiki.repo.log(wiki.ref, @page.path).first
+        raw_data = page.raw_data
+        @content = raw_data.respond_to?(:force_encoding) ? raw_data.force_encoding('UTF-8') : raw_data
+        @livewritingActions = replayActions
+        mustache :edit
+      else
+        redirect to("/create/#{encodeURIComponent(@name)}")
+      end
+    end
+
+    
 
     post '/edit/*' do
       path      = '/' + clean_url(sanitize_empty_params(params[:path])).to_s
@@ -151,11 +174,16 @@ module Precious
       committer = Gollum::Committer.new(wiki, commit_message)
       commit    = {:committer => committer}
 
+      
+
       update_wiki_page(wiki, page, params[:content], commit, name, params[:format])
       update_wiki_page(wiki, page.header,  params[:header],  commit) if params[:header]
       update_wiki_page(wiki, page.footer,  params[:footer],  commit) if params[:footer]
       update_wiki_page(wiki, page.sidebar, params[:sidebar], commit) if params[:sidebar]
-      committer.commit
+      version = committer.commit
+      File.open(version + ".json", "w") do |file|
+        file.write params[:livewritingActions]
+      end
 
       page = wiki.page(rename) if rename
 
@@ -198,12 +226,16 @@ module Precious
 
       page_dir = File.join(page_dir, path)
 
+      
       # write_page is not directory aware so use wiki_options to emulate dir support.
       wiki_options = settings.wiki_options.merge({ :page_file_dir => page_dir })
       wiki         = Gollum::Wiki.new(settings.gollum_path, wiki_options)
 
       begin
-        wiki.write_page(name, format, params[:content], commit_message)
+        version = wiki.write_page(name, format, params[:content], commit_message)
+        File.open(version + ".json", "w") do |file|
+          file.write params[:livewritingActions]
+        end
         redirect to("/#{clean_url(CGI.escape(::File.join(page_dir,name)))}")
       rescue Gollum::DuplicatePageError => e
         @message = "Duplicate page: #{e.message}"
@@ -346,7 +378,7 @@ module Precious
       name         = extract_name(fullpath)
       path         = extract_path(fullpath)
       wiki         = wiki_new
-
+      
       path = '/' if path.nil?
 
       if page = wiki.paged(name, path, exact = true)
