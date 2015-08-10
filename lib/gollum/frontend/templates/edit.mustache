@@ -1,6 +1,8 @@
 <div id="wiki-wrapper" class="edit">
 <div id="head">
-  <h1>Editing <strong>{{title}}</strong></h1>
+  <h1>{{#is_livewriting}}Replaying{{/is_livewriting}}
+  {{^is_livewriting}}Editing{{/is_livewriting}}
+<strong>{{title}}</strong></h1>
   <ul class="actions">
     <li class="minibutton"><a href="{{base_url}}/{{escaped_url_path}}"
        class="action-view-page">View Page</a></li>

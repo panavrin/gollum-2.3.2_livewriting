@@ -4,7 +4,7 @@ module Precious
       include Editable
       include HasPage
 
-      attr_reader :page, :content, :livewritingActions
+      attr_reader :page, :content, :livewritingActions, :livewriting_flag
 
        # return path set in app.rb not @page.path
        def path
@@ -58,6 +58,10 @@ module Precious
 
       def is_edit_page
         true
+      end
+
+      def is_livewriting
+        livewriting_flag
       end
 
       def format
